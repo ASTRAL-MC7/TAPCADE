@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#EFEFEF]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tapcade - Instant Web Arcade</title>
+    
+    <!-- Safari / Mobile Browser Theme Color Integration -->
+    <meta name="theme-color" content="#152028" id="metaThemeColor">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: '#EFEFEF',
+                            slate: '#1F2D36',
+                            header: '#152028',
+                            cyan: '#00E5FF',
+                            accent: '#00E5FF',
+                            hot: '#FF3B30',
+                            top: '#9333EA',
+                            mobile: '#10B981',
+                            desktop: '#3B82F6'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #EFEFEF;
+            color: #1F2D36;
+        }
+
+        .game-grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1.5rem;
+            padding: 1.5rem 0;
+            perspective: 1200px;
+        }
+
+        .game-card {
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+            transform-origin: center bottom;
+            will-change: transform;
+        }
+
+        /* 45-degree ribbon badge positioned on top-left edge */
+        .ribbon-badge-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 90px;
+            height: 90px;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .ribbon-badge {
+            position: absolute;
+            top: 15px;
+            left: -32px;
+            width: 120px;
+            text-align: center;
+            transform: rotate(-45deg);
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: #FFFFFF;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            padding: 3px 0;
+        }
+
+        /* Liquid Glass Texture with 0 blur */
+        .liquid-glass {
+            background: rgba(31, 45, 54, 0.85);
+            backdrop-filter: blur(0px) saturate(180%);
+            -webkit-backdrop-filter: blur(0px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 24px rgba(0, 229, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .liquid-glass::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .liquid-glass:hover::before {
+            left: 100%;
+        }
+
+        .liquid-glass:active {
+            transform: scale(0.96);
+            box-shadow: 0 2px 10px rgba(0, 229, 255, 0.1);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes textGlowPulse {
+            0%, 100% {
+                text-shadow: 0 0 10px rgba(0, 229, 255, 0.4), 0 0 20px rgba(0, 229, 255, 0.2);
+            }
+            50% {
+                text-shadow: 0 0 22px rgba(0, 229, 255, 0.9), 0 0 35px rgba(0, 229, 255, 0.6);
+            }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .animate-fade-in-delay {
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards;
+            opacity: 0;
+        }
+
+        .animate-glow-text {
+            animation: textGlowPulse 3s infinite ease-in-out;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #152028;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00E5FF;
+        }
+    </style>
+</head>
+<body class="min-h-full flex flex-col antialiased selection:bg-[#00E5FF] selection:text-[#1F2D36]">
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="w-full bg-[#152028] dark:bg-[#152028] light:bg-white border-b border-slate-700/60 light:border-slate-200 sticky top-0 z-40 shadow-lg transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+            
+            <!-- Logo & Recommend Game Button -->
+            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+                <a href="#" onclick="resetFilters(); return false;" class="flex items-center gap-2.5 group">
+                    <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=120&q=80" 
+                         alt="Arcade Logo" 
+                         class="w-10 h-10 rounded-xl object-cover border border-[#00E5FF]/40 shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/100x100/152028/00E5FF?text=🕹️';">
+                    <span class="text-xl sm:text-2xl font-black tracking-wider text-white light:text-slate-900">TAP<span class="text-[#00E5FF]">CADE</span></span>
+                </a>
+
+                <a href="https://t.me/tapcadechat" target="_blank" rel="noopener noreferrer" 
+                   class="inline-flex items-center gap-1.5 text-xs bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold px-3 py-1.5 rounded-xl shadow-md hover:shadow-emerald-500/30 transition-all hover:-translate-y-0.5 border border-emerald-400/30 active:scale-95">
+                    <span>🎮</span>
+                    <span class="hidden sm:inline">Recommend game</span>
+                    <span class="sm:hidden">Recommend</span>
+                </a>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-xs sm:max-w-md mx-2">
+                <div class="relative">
+                    <input type="text" id="searchInput" oninput="handleSearch()" placeholder="Search 125+ arcade games..." 
+                           class="w-full bg-slate-900/90 light:bg-slate-100 text-white light:text-slate-900 placeholder-slate-400 light:placeholder-slate-500 text-sm rounded-xl pl-9 pr-8 py-2 border border-slate-700 light:border-slate-300 focus:outline-none focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF] transition">
+                    <svg class="w-4 h-4 text-slate-400 light:text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-2.5 text-slate-400 light:text-slate-600 hover:text-white light:hover:text-slate-900 text-xs">✕</button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-2">
+                <button onclick="pickRandomGame()" 
+                        class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold shadow-md hover:shadow-orange-500/30 flex items-center gap-1.5 transition active:scale-95" title="Play Random Game">
+                    <span>🎲</span>
+                    <span class="hidden md:inline">Random Game</span>
+                </button>
+
+                <button onclick="toggleTheme()" id="themeToggleBtn"
+                        class="bg-slate-800 light:bg-slate-200 hover:bg-slate-700 light:hover:bg-slate-300 text-amber-400 light:text-slate-700 p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold border border-slate-700 light:border-slate-300 flex items-center gap-1.5 transition shadow" title="Toggle Light/Dark Mode">
+                    <span id="themeIcon">☀️</span>
+                    <span class="hidden md:inline" id="themeText">Light</span>
+                </button>
+
+                <button onclick="toggleAiConciergeModal()" 
+                        class="bg-slate-800 light:bg-slate-200 hover:bg-slate-700 light:hover:bg-slate-300 text-[#00E5FF] light:text-cyan-700 p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold border border-[#00E5FF]/30 flex items-center gap-1.5 transition shadow">
+                    <span>🤖</span>
+                    <span class="hidden md:inline">AI Assistant</span>
+                </button>
+
+                <button onclick="toggleAdminModal()" 
+                        class="bg-slate-800 light:bg-slate-200 hover:bg-slate-700 light:hover:bg-slate-300 text-slate-200 light:text-slate-700 p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold border border-slate-700 light:border-slate-300 flex items-center gap-1.5 transition shadow">
+                    <span>⚙️</span>
+                    <span class="hidden md:inline">Admin</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+        
+        <!-- Hero Banner with Animations -->
+        <div class="bg-[#1F2D36] light:bg-slate-800 text-white rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 w-64 h-64 bg-[#00E5FF]/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div class="space-y-3 max-w-xl z-10 text-center md:text-left">
+                <div class="inline-flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-full border border-slate-700 text-xs text-cyan-300 font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    Instant Browser Play • 125+ Arcade Collection
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-black tracking-tight animate-fade-in-up leading-tight">
+                    Instant Arcade Games <br><span class="text-[#00E5FF] animate-glow-text inline-block">Ready to Tap & Play</span>
+                </h1>
+                <p class="text-slate-300 text-sm sm:text-base animate-fade-in-delay">
+                    Handpicked mobile & desktop games. Enjoy instant strategy guides, voice introductions, and direct browser gaming!
+                </p>
+            </div>
+
+            <!-- Quick Filter Tabs -->
+            <div class="grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap w-full md:w-auto z-10">
+                <button onclick="setFilter('ALL')" id="filter-ALL" 
+                        class="filter-btn active bg-[#00E5FF] text-[#1F2D36] font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm shadow transition hover:opacity-90 text-center">
+                    🌐 All Games
+                </button>
+                <button onclick="setFilter('TOP')" id="filter-TOP" 
+                        class="filter-btn bg-slate-800 light:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm border border-slate-700 light:border-slate-600 hover:border-purple-500/50 transition text-center flex items-center justify-center gap-1">
+                    <span class="text-purple-400">👑</span> TOP
+                </button>
+                <button onclick="setFilter('HOT')" id="filter-HOT" 
+                        class="filter-btn bg-slate-800 light:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm border border-slate-700 light:border-slate-600 hover:border-red-500/50 transition text-center flex items-center justify-center gap-1">
+                    <span class="text-red-500">🔥</span> HOT
+                </button>
+                <button onclick="setFilter('Phone')" id="filter-Phone" 
+                        class="filter-btn bg-slate-800 light:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm border border-slate-700 light:border-slate-600 hover:border-emerald-500/50 transition text-center flex items-center justify-center gap-1">
+                    <span class="text-emerald-400">📱</span> Phone
+                </button>
+                <button onclick="setFilter('Desktop')" id="filter-Desktop" 
+                        class="filter-btn bg-slate-800 light:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm border border-slate-700 light:border-slate-600 hover:border-blue-500/50 transition text-center flex items-center justify-center gap-1">
+                    <span class="text-blue-400">💻</span> Desktop
+                </button>
+            </div>
+        </div>
+
+        <!-- GAMES SECTION HEADER -->
+        <div class="flex items-center justify-between px-1">
+            <div class="flex items-center gap-2">
+                <h2 class="text-xl font-bold text-[#1F2D36] dark:text-white light:text-slate-900" id="sectionTitle">Featured Arcade Games</h2>
+                <span id="gameCountBadge" class="bg-slate-300 light:bg-slate-300 text-slate-800 text-xs font-extrabold px-2.5 py-0.5 rounded-full">0</span>
+            </div>
+            <div class="text-xs text-slate-500 font-medium hidden sm:block">
+                ⚡ <span class="text-purple-600 font-bold">TOP</span> & <span class="text-red-600 font-bold">HOT</span> games pinned to top • macOS Magnification Enabled
+            </div>
+        </div>
+
+        <!-- GAME GRID CONTAINER -->
+        <div id="gameGrid" class="game-grid-container"></div>
+
+        <!-- EMPTY STATE -->
+        <div id="emptyState" class="hidden flex-col items-center justify-center py-16 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-center p-6 space-y-3">
+            <div class="text-4xl">🕹️</div>
+            <h3 class="text-lg font-bold text-[#1F2D36] dark:text-white">No games found</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md">Try searching for a different keyword or switch your filter category.</p>
+            <button onclick="resetFilters()" class="bg-[#1F2D36] light:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-slate-800 transition">
+                Reset Filters
+            </button>
+        </div>
+    </main>
+
+    <!-- FOOTER WITH LIQUID GLASS "DEVELOPED BY VAELUX" BUTTON -->
+    <footer class="w-full py-8 mt-auto flex flex-col items-center justify-center gap-2 border-t border-slate-300/60 dark:border-slate-800 bg-[#152028] text-white">
+        <a href="https://t.me/vaelux" target="_blank" rel="noopener noreferrer" 
+           class="liquid-glass text-white font-bold px-6 py-3 rounded-2xl text-sm tracking-wide flex items-center gap-2 shadow-lg hover:shadow-cyan-500/30 transition-all hover:scale-105 active:scale-95">
+            <span>🚀 Developed by VAELUX</span>
+            <svg class="w-4 h-4 text-[#00E5FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+            </svg>
+        </a>
+    </footer>
+
+    <!-- GAME PLAYER MODAL -->
+    <div id="gameModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-2 sm:p-4">
+        <div id="gameModalCard" class="w-full max-w-5xl bg-[#152028] rounded-2xl border border-slate-700/80 shadow-2xl flex flex-col overflow-hidden max-h-[95vh] h-[850px] transition-all duration-300">
+            
+            <!-- Modal Header -->
+            <div class="px-4 py-3 bg-[#1F2D36] flex items-center justify-between border-b border-slate-700 shrink-0">
+                <div class="flex items-center gap-3">
+                    <span id="modalGameBadge" class="text-[10px] font-black uppercase px-2 py-0.5 rounded text-white bg-purple-600">TOP</span>
+                    <h3 id="modalGameTitle" class="text-base sm:text-lg font-bold text-white truncate max-w-xs sm:max-w-md">Game Title</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleGameSidebar()" id="sidebarToggleBtn" class="bg-slate-800 hover:bg-slate-700 text-[#00E5FF] text-xs font-bold px-3 py-1.5 rounded-lg border border-[#00E5FF]/30 transition flex items-center gap-1">
+                        💡 Strategy Guide
+                    </button>
+                    <button onclick="toggleGameFullscreen()" id="fullscreenBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1" title="Toggle Fullscreen">
+                        <span>⛶</span>
+                        <span class="hidden sm:inline">Fullscreen</span>
+                    </button>
+                    <button onclick="reloadIframe()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition" title="Reload Game">
+                        🔄
+                    </button>
+                    <button onclick="closeGameModal()" class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition text-lg" title="Close Modal">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content Area -->
+            <div class="flex-1 flex flex-col md:flex-row overflow-hidden bg-black relative">
+                <div class="flex-1 h-full w-full relative" id="iframeWrapper">
+                    <iframe id="gameIframe" src="about:blank" class="w-full h-full border-0" allow="autoplay; payment; fullscreen; gamepad"></iframe>
+                </div>
+
+                <div id="gameSidebar" class="hidden w-full md:w-80 bg-[#152028] border-t md:border-t-0 md:border-l border-slate-700 p-4 overflow-y-auto flex-col gap-3 text-slate-200 text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                        <span class="font-bold text-[#00E5FF] flex items-center gap-1">🧠 AI Game Guide</span>
+                        <button onclick="toggleGameSidebar()" class="text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    <div id="aiStrategyContent" class="space-y-3 leading-relaxed">
+                        <p class="text-slate-400 italic">Click generate to produce custom strategy tips and controls for this game.</p>
+                    </div>
+                    <button id="generateStrategyBtn" onclick="generateAiStrategy()" class="w-full mt-2 bg-[#00E5FF] text-[#1F2D36] font-bold py-2 rounded-xl text-xs hover:opacity-90 transition">
+                        ⚡ Generate Strategy Tips
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI CONCIERGE CHAT MODAL -->
+    <div id="aiConciergeModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-[#152028] rounded-2xl border border-slate-700 shadow-2xl flex flex-col h-[550px] overflow-hidden">
+            <div class="px-4 py-3 bg-[#1F2D36] flex items-center justify-between border-b border-slate-700">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">🤖</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-white">AI Arcade Concierge</h3>
+                        <p class="text-[11px] text-[#00E5FF]">Smart Game Assistant</p>
+                    </div>
+                </div>
+                <button onclick="toggleAiConciergeModal()" class="text-slate-400 hover:text-white p-1">✕</button>
+            </div>
+
+            <div id="conciergeChatFeed" class="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+                <div class="bg-slate-800 text-slate-200 p-3 rounded-2xl rounded-tl-none max-w-[85%] border border-slate-700">
+                    Welcome to Tapcade! 👋 I can recommend games based on your favorite genre or platform. What kind of game are you looking for today?
+                </div>
+            </div>
+
+            <div class="px-3 py-2 bg-slate-900 border-t border-slate-800 flex gap-2 overflow-x-auto text-[11px]">
+                <button onclick="sendQuickConcierge('Show me top TOP games')" class="bg-slate-800 hover:bg-slate-700 text-purple-300 px-2.5 py-1 rounded-lg border border-slate-700 whitespace-nowrap">
+                    👑 TOP games
+                </button>
+                <button onclick="sendQuickConcierge('Show me top HOT games')" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2.5 py-1 rounded-lg border border-slate-700 whitespace-nowrap">
+                    🔥 HOT games
+                </button>
+                <button onclick="sendQuickConcierge('Best games for mobile touch screens')" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2.5 py-1 rounded-lg border border-slate-700 whitespace-nowrap">
+                    📱 Phone picks
+                </button>
+            </div>
+
+            <form onsubmit="handleConciergeSubmit(event)" class="p-3 bg-[#1F2D36] border-t border-slate-700 flex gap-2">
+                <input type="text" id="conciergeInput" placeholder="Ask for game recommendations..." required
+                       class="flex-1 bg-slate-900 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-[#00E5FF]">
+                <button type="submit" class="bg-[#00E5FF] text-[#1F2D36] font-bold px-4 py-2 rounded-xl text-xs hover:opacity-90 transition">
+                    Send
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADMIN PANEL MODAL -->
+    <div id="adminModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+            <div class="px-5 py-4 bg-[#1F2D36] text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">⚙️</span>
+                    <h3 class="font-bold text-sm">Tapcade Admin Management</h3>
+                </div>
+                <button onclick="toggleAdminModal()" class="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <div class="p-6">
+                <div id="adminAuthSection" class="space-y-4 text-center">
+                    <div class="w-12 h-12 rounded-full bg-cyan-100 text-[#1F2D36] mx-auto flex items-center justify-center text-xl font-bold">
+                        🔒
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-bold text-[#1F2D36]">Admin Access Required</h4>
+                        <p class="text-xs text-slate-500 mt-1">Enter your password to add or manage arcade games.</p>
+                    </div>
+
+                    <form onsubmit="handleAdminAuth(event)" class="space-y-3 max-w-xs mx-auto">
+                        <input type="password" id="adminPasswordInput" placeholder="Enter password" required
+                               class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-4 py-2.5 text-center text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#00E5FF]">
+                        <button type="submit" class="w-full bg-[#1F2D36] hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition shadow">
+                            Unlock Panel
+                        </button>
+                    </form>
+                </div>
+
+                <div id="adminContentSection" class="hidden space-y-5">
+                    <div class="flex items-center justify-between border-b pb-3 border-slate-200">
+                        <span class="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Admin Session Unlocked
+                        </span>
+                        <button onclick="logoutAdmin()" class="text-xs text-red-500 hover:underline font-semibold">Log Out</button>
+                    </div>
+
+                    <form onsubmit="handleAddGame(event)" class="space-y-3">
+                        <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider">Add New Game</h4>
+                        
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 block mb-1">Game Title</label>
+                            <input type="text" id="newGameTitle" placeholder="e.g. Pixel Runner" required
+                                   class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#00E5FF]">
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 block mb-1">Game Embed/Iframe URL</label>
+                            <input type="url" id="newGameUrl" placeholder="https://example.com/game-frame" required
+                                   class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#00E5FF]">
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 block mb-1">Thumbnail Image URL</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="newGameImage" placeholder="https://images.unsplash.com/..." required
+                                       class="flex-1 bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#00E5FF]">
+                                <button type="button" onclick="generateAiThumbnail()" class="bg-slate-800 text-[#00E5FF] px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 whitespace-nowrap">
+                                    🎨 AI Art
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 block mb-1">Category / Badge</label>
+                            <select id="newGameType" class="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#00E5FF]">
+                                <option value="TOP">👑 TOP (Pinned absolute top)</option>
+                                <option value="HOT">🔥 HOT (Pinned below top)</option>
+                                <option value="Phone">📱 Phone</option>
+                                <option value="Desktop">💻 Desktop</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="w-full bg-[#00E5FF] text-[#1F2D36] font-bold py-2.5 rounded-xl text-xs hover:opacity-90 transition shadow">
+                            Save Game to Library
+                        </button>
+                    </form>
+
+                    <div class="pt-2 border-t border-slate-200">
+                        <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2">Existing Games (<span id="adminGameCount">0</span>)</h4>
+                        <div id="adminGamesList" class="max-h-48 overflow-y-auto space-y-2 pr-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM CONFIRMATION MODAL -->
+    <div id="confirmModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-white rounded-2xl p-5 shadow-2xl space-y-4 text-center">
+            <div class="text-3xl">⚠️</div>
+            <h4 id="confirmMessage" class="text-sm font-bold text-[#1F2D36]">Are you sure you want to proceed?</h4>
+            <div class="flex gap-2">
+                <button id="confirmCancelBtn" class="flex-1 bg-slate-200 text-slate-800 font-bold py-2 rounded-xl text-xs hover:bg-slate-300 transition">
+                    Cancel
+                </button>
+                <button id="confirmOkBtn" class="flex-1 bg-red-500 text-white font-bold py-2 rounded-xl text-xs hover:bg-red-600 transition">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEFAULT_GAMES = [
+            // USER REQUESTED TOP GAMES
+            { id: 'game-top-1', title: 'Polytrack Racing', url: 'https://www.kodub.com/apps/polytrack', image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80', type: 'TOP', createdAt: 1900000003000 },
+            { id: 'game-top-2', title: 'Zpaco Arcade', url: 'https://www.kodub.com/apps/zpaco', image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80', type: 'TOP', createdAt: 1900000002000 },
+            { id: 'game-top-3', title: 'Storage Simulator', url: 'https://www.kodub.com/apps/storagesimulator', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80', type: 'TOP', createdAt: 1900000001000 },
+            
+            // EXISTING & EXPANDED 120+ GAMES
+            { id: 'game-1', title: 'HeXGL Sci-Fi Racing', url: 'https://hexgl.bkcore.com/play/', image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000000000 },
+            { id: 'game-2', title: 'PAC-MAN Web Edition', url: 'https://freepacman.org/', image: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000001000 },
+            { id: 'game-3', title: 'Hextris Puzzle', url: 'https://hextris.io/', image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000002000 },
+            { id: 'game-4', title: 'Tower Building 3D', url: 'https://www.retrogames.cc/', image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000003000 },
+            { id: 'game-5', title: '2048 Puzzle Classic', url: 'https://play2048.co/', image: 'https://images.unsplash.com/photo-1611996575749-79a3a250f948?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000004000 },
+            { id: 'game-6', title: 'Retro Ping Pong', url: 'https://www.ponggame.org/', image: 'https://images.unsplash.com/photo-1534158914592-062992fbe900?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000005000 },
+            { id: 'game-7', title: 'Tetris Classic', url: 'https://tetris.com/play-tetris', image: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000006000 },
+            { id: 'game-8', title: 'Snake Retro Arcade', url: 'https://playsnake.org/', image: 'https://images.unsplash.com/photo-1585504198199-20277593b94f?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000007000 },
+            { id: 'game-9', title: 'Minesweeper Online', url: 'https://minesweeperonline.com/', image: 'https://images.unsplash.com/photo-1614680376593-902f749f7ffc?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000008000 },
+            { id: 'game-10', title: 'Solitaire Card Game', url: 'https://worlds-hardest-game.org/solitaire.html', image: 'https://images.unsplash.com/photo-1543269865-cbf427effbad?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000009000 },
+            { id: 'game-11', title: 'Flappy Bird Web', url: 'https://flappybird.ee/', image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000010000 },
+            { id: 'game-12', title: 'Chess Master Online', url: 'https://lichess.org/embed/otb?theme=auto&bg=auto', image: 'https://images.unsplash.com/photo-1529699211952-734e80c4d42b?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000011000 },
+            { id: 'game-13', title: 'Sudoku Puzzle Daily', url: 'https://sudoku.com/', image: 'https://images.unsplash.com/photo-1606326608606-aa0b62935f2b?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000012000 },
+            { id: 'game-14', title: 'Chrome Dino Runner', url: 'https://elgoog.im/t-rex/', image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000013000 },
+            { id: 'game-15', title: 'Pacman Legend', url: 'https://freepacman.org/', image: 'https://images.unsplash.com/photo-1579373903781-fd5c0c30c4cd?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000014000 },
+            { id: 'game-16', title: 'Space Invaders Retro', url: 'https://www.freeinvaders.org/', image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000015000 },
+            { id: 'game-17', title: 'Checkers Deluxe', url: 'https://www.247checkers.com/', image: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000016000 },
+            { id: 'game-18', title: 'Wordle Daily Challenge', url: 'https://www.nytimes.com/games/wordle/index.html', image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000017000 },
+            { id: 'game-19', title: 'Mahjong Connect', url: 'https://www.mahjong.com/', image: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000018000 },
+            { id: 'game-20', title: 'Crossword Mini', url: 'https://www.nytimes.com/crosswords/game/mini', image: 'https://images.unsplash.com/photo-1457369804613-52c61a468e7d?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000019000 },
+            { id: 'game-21', title: 'Bubble Shooter Arcade', url: 'https://www.bubbleshooter.com/', image: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000020000 },
+            { id: 'game-22', title: 'Pool 8-Ball Pro', url: 'https://www.pool-games.com/', image: 'https://images.unsplash.com/photo-1511193311914-0346f16efe90?auto=format&fit=crop&w=600&q=80', type: 'Desktop', createdAt: 1700000021000 },
+            { id: 'game-23', title: 'Bowling 3D Strike', url: 'https://www.retrogames.cc/', image: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=600&q=80', type: 'Phone', createdAt: 1700000022000 },
+            { id: 'game-24', title: 'Neon Brick Breaker', url: 'https://hextris.io/', image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80', type: 'HOT', createdAt: 1700000023000 }
+        ];
+
+        let gamesState = [];
+        let activeFilter = 'ALL';
+        let searchQuery = '';
+        let currentGame = null;
+        let isAdminLoggedIn = false;
+        let currentTheme = 'dark';
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadTheme();
+            loadGamesFromStorage();
+            renderGameGrid();
+            checkAdminSession();
+        });
+
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('tapcade_theme') || 'dark';
+            currentTheme = savedTheme;
+            applyTheme();
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('tapcade_theme', currentTheme);
+            applyTheme();
+        }
+
+        function applyTheme() {
+            const rootHtml = document.documentElement;
+            const themeIcon = document.getElementById('themeIcon');
+            const themeText = document.getElementById('themeText');
+            const metaThemeColor = document.getElementById('metaThemeColor');
+
+            if (currentTheme === 'light') {
+                rootHtml.classList.remove('dark');
+                rootHtml.classList.add('light');
+                document.body.style.backgroundColor = '#F8FAFC';
+                document.body.style.color = '#0F172A';
+                if (themeIcon) themeIcon.innerText = '🌙';
+                if (themeText) themeText.innerText = 'Dark';
+                if (metaThemeColor) metaThemeColor.setAttribute('content', '#FFFFFF');
+            } else {
+                rootHtml.classList.remove('light');
+                rootHtml.classList.add('dark');
+                document.body.style.backgroundColor = '#152028';
+                document.body.style.color = '#F8FAFC';
+                if (themeIcon) themeIcon.innerText = '☀️';
+                if (themeText) themeText.innerText = 'Light';
+                if (metaThemeColor) metaThemeColor.setAttribute('content', '#152028');
+            }
+            
+            if (typeof renderGameGrid === 'function') {
+                renderGameGrid();
+            }
+        }
+
+        function loadGamesFromStorage() {
+            try {
+                const stored = localStorage.getItem('tapcade_games');
+                if (stored) {
+                    gamesState = JSON.parse(stored);
+                } else {
+                    gamesState = [...DEFAULT_GAMES];
+                    saveGamesToStorage();
+                }
+            } catch (e) {
+                console.error('LocalStorage parse error, falling back to defaults:', e);
+                gamesState = [...DEFAULT_GAMES];
+            }
+        }
+
+        function saveGamesToStorage() {
+            localStorage.setItem('tapcade_games', JSON.stringify(gamesState));
+        }
+
+        function renderGameGrid() {
+            const grid = document.getElementById('gameGrid');
+            const emptyState = document.getElementById('emptyState');
+            const countBadge = document.getElementById('gameCountBadge');
+
+            let filtered = gamesState.filter(game => {
+                const matchesFilter = (activeFilter === 'ALL') || 
+                                     (activeFilter === 'TOP' && game.type === 'TOP') ||
+                                     (activeFilter === 'HOT' && game.type === 'HOT') ||
+                                     (activeFilter === 'Phone' && game.type === 'Phone') ||
+                                     (activeFilter === 'Desktop' && game.type === 'Desktop');
+                
+                const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase());
+                return matchesFilter && matchesSearch;
+            });
+
+            // Sorting: TOP first, then HOT, then rest by timestamp
+            filtered.sort((a, b) => {
+                if (a.type === 'TOP' && b.type !== 'TOP') return -1;
+                if (a.type !== 'TOP' && b.type === 'TOP') return 1;
+                if (a.type === 'HOT' && b.type !== 'HOT' && b.type !== 'TOP') return -1;
+                if (a.type !== 'HOT' && a.type !== 'TOP' && b.type === 'HOT') return 1;
+                return b.createdAt - a.createdAt;
+            });
+
+            countBadge.innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            emptyState.classList.remove('flex');
+
+            const isDark = currentTheme === 'dark';
+            const cardBgClass = isDark ? 'bg-[#1F2D36] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900';
+            const titleColorClass = isDark ? 'text-white' : 'text-[#1F2D36]';
+
+            grid.innerHTML = filtered.map(game => {
+                const isTop = game.type === 'TOP';
+                const isHot = game.type === 'HOT';
+                
+                let ribbonBg = 'bg-blue-600';
+                let ribbonLabel = '💻 Desktop';
+                if (isTop) {
+                    ribbonBg = 'bg-purple-600';
+                    ribbonLabel = '👑 TOP';
+                } else if (isHot) {
+                    ribbonBg = 'bg-red-600';
+                    ribbonLabel = '🔥 HOT';
+                } else if (game.type === 'Phone') {
+                    ribbonBg = 'bg-emerald-600';
+                    ribbonLabel = '📱 Phone';
+                }
+
+                return `
+                    <div class="game-card ${cardBgClass} rounded-2xl overflow-hidden border shadow-sm hover:shadow-2xl flex flex-col group relative" data-card>
+                        <div class="relative aspect-video bg-slate-900 overflow-hidden cursor-pointer" onclick="openGame('${game.id}')">
+                            <img src="${game.image}" 
+                                 alt="${game.title}" 
+                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                 onerror="this.onerror=null; this.src='https://placehold.co/600x400/1F2D36/00E5FF?text=TAP+CADE';">
+                            
+                            <!-- 45-degree corner ribbon badge -->
+                            <div class="ribbon-badge-wrapper">
+                                <div class="ribbon-badge ${ribbonBg}">
+                                    ${ribbonLabel}
+                                </div>
+                            </div>
+
+                            <div class="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <span class="w-12 h-12 rounded-full bg-[#00E5FF] text-[#1F2D36] flex items-center justify-center text-xl font-bold shadow-lg transform scale-75 group-hover:scale-100 transition-transform">
+                                    ▶
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="p-4 flex flex-col flex-1 justify-between gap-3">
+                            <div>
+                                <h3 class="font-extrabold ${titleColorClass} text-base group-hover:text-[#00E5FF] transition-colors line-clamp-1 cursor-pointer" onclick="openGame('${game.id}')">
+                                    ${escapeHtml(game.title)}
+                                </h3>
+                                <p class="${isDark ? 'text-slate-400' : 'text-slate-500'} text-xs mt-0.5">Instant Browser Game</p>
+                            </div>
+
+                            <div class="flex items-center gap-2 pt-1">
+                                <button onclick="openGame('${game.id}')" 
+                                        class="flex-1 bg-[#00E5FF] hover:opacity-90 text-[#1F2D36] font-bold py-2 rounded-xl text-xs transition shadow active:scale-95 text-center">
+                                    Play Now
+                                </button>
+                                <button onclick="playAiVoiceIntro('${game.id}')" 
+                                        class="p-2 ${isDark ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'} rounded-xl text-xs transition" title="Play AI Voice Announcer Intro">
+                                    🔊
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            initMacMagnification();
+        }
+
+        function initMacMagnification() {
+            const container = document.getElementById('gameGrid');
+            if (!container) return;
+
+            const cards = container.querySelectorAll('[data-card]');
+
+            container.addEventListener('mousemove', (e) => {
+                cards.forEach(card => {
+                    const rect = card.getBoundingClientRect();
+                    const cardCenterX = rect.left + rect.width / 2;
+                    const cardCenterY = rect.top + rect.height / 2;
+                    const distance = Math.hypot(e.clientX - cardCenterX, e.clientY - cardCenterY);
+                    const maxDistance = 320;
+                    
+                    if (distance < maxDistance) {
+                        const factor = 1 - (distance / maxDistance);
+                        const scale = 1 + (0.22 * factor); // Enhanced macOS dock magnification
+                        const translateY = -14 * factor;
+                        card.style.transform = `scale(${scale}) translateY(${translateY}px)`;
+                        card.style.zIndex = Math.round(100 * factor);
+                        card.style.boxShadow = `0 ${10 + 20 * factor}px ${25 + 30 * factor}px rgba(0, 229, 255, ${0.15 + 0.25 * factor})`;
+                    } else {
+                        card.style.transform = 'scale(1) translateY(0px)';
+                        card.style.zIndex = '1';
+                        card.style.boxShadow = '';
+                    }
+                });
+            });
+
+            container.addEventListener('mouseleave', () => {
+                cards.forEach(card => {
+                    card.style.transform = 'scale(1) translateY(0px)';
+                    card.style.zIndex = '1';
+                    card.style.boxShadow = '';
+                });
+            });
+        }
+
+        function setFilter(filterType) {
+            activeFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-[#00E5FF]', 'text-[#1F2D36]');
+                btn.classList.add('bg-slate-800', 'text-slate-200');
+            });
+            
+            const activeBtn = document.getElementById(`filter-${filterType}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-slate-800', 'text-slate-200');
+                activeBtn.classList.add('bg-[#00E5FF]', 'text-[#1F2D36]');
+            }
+
+            renderGameGrid();
+        }
+
+        function handleSearch() {
+            const input = document.getElementById('searchInput');
+            const clearBtn = document.getElementById('clearSearchBtn');
+            searchQuery = input.value.trim();
+            
+            if (searchQuery.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            renderGameGrid();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchQuery = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            renderGameGrid();
+        }
+
+        function resetFilters() {
+            setFilter('ALL');
+            clearSearch();
+        }
+
+        function pickRandomGame() {
+            if (!gamesState.length) return;
+            const randomIndex = Math.floor(Math.random() * gamesState.length);
+            const randomGame = gamesState[randomIndex];
+            showToast(`🎲 Random pick: ${randomGame.title}!`, 'success');
+            openGame(randomGame.id);
+        }
+
+        function openGame(gameId) {
+            const game = gamesState.find(g => g.id === gameId);
+            if (!game) return;
+
+            currentGame = game;
+            document.getElementById('modalGameTitle').innerText = game.title;
+            
+            const badge = document.getElementById('modalGameBadge');
+            badge.innerText = game.type;
+            badge.className = `text-[10px] font-black uppercase px-2 py-0.5 rounded text-white ${
+                game.type === 'TOP' ? 'bg-purple-600' : (game.type === 'HOT' ? 'bg-red-500' : (game.type === 'Phone' ? 'bg-emerald-500' : 'bg-blue-500'))
+            }`;
+
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = game.url;
+
+            document.getElementById('aiStrategyContent').innerHTML = `<p class="text-slate-400 italic">Click generate to produce custom strategy tips and controls for ${escapeHtml(game.title)}.</p>`;
+            document.getElementById('gameSidebar').classList.add('hidden');
+
+            document.getElementById('gameModal').classList.remove('hidden');
+
+            setTimeout(() => {
+                const modalCard = document.getElementById('gameModalCard');
+                if (modalCard && modalCard.requestFullscreen && window.innerWidth >= 768) {
+                    modalCard.requestFullscreen().catch(() => {});
+                }
+            }, 100);
+        }
+
+        function closeGameModal() {
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = 'about:blank';
+            document.getElementById('gameModal').classList.add('hidden');
+            currentGame = null;
+        }
+
+        function toggleGameFullscreen() {
+            const modalCard = document.getElementById('gameModalCard');
+            if (!document.fullscreenElement) {
+                if (modalCard.requestFullscreen) {
+                    modalCard.requestFullscreen();
+                } else if (modalCard.webkitRequestFullscreen) {
+                    modalCard.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        function reloadIframe() {
+            if (!currentGame) return;
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = currentGame.url;
+        }
+
+        function toggleGameSidebar() {
+            const sidebar = document.getElementById('gameSidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        const API_KEY = "";
+
+        async function generateAiStrategy() {
+            if (!currentGame) return;
+            const btn = document.getElementById('generateStrategyBtn');
+            const content = document.getElementById('aiStrategyContent');
+
+            btn.disabled = true;
+            btn.innerText = '🤖 Thinking...';
+            content.innerHTML = '<p class="text-cyan-400 animate-pulse">Analyzing game mechanics & controls...</p>';
+
+            try {
+                const prompt = `Provide 3 short, high-value pro strategies and recommended key controls for the arcade game titled "${currentGame.title}". Keep it bulleted and under 120 words.`;
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Could not load guide.';
+                content.innerHTML = `<div class="prose prose-invert text-xs">${text.replace(/\n/g, '<br>')}</div>`;
+            } catch (err) {
+                content.innerHTML = '<p class="text-red-400">Failed to connect to AI server.</p>';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '⚡ Regenerate Strategy';
+            }
+        }
+
+        async function playAiVoiceIntro(gameId) {
+            const game = gamesState.find(g => g.id === gameId);
+            if (!game) return;
+
+            showToast(`🎙️ Generating voice intro for ${game.title}...`, 'info');
+
+            try {
+                const prompt = `Say energetically: Welcome to Tapcade! Prepare your fingers for ${game.title}! Ready... Go!`;
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: {
+                                voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                const part = data.candidates?.[0]?.content?.parts?.[0];
+                const base64Audio = part?.inlineData?.data;
+
+                if (base64Audio) {
+                    const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+                    audio.play();
+                } else {
+                    showToast('Voice playback unavailable right now.', 'warning');
+                }
+            } catch (err) {
+                showToast('Audio generation failed.', 'error');
+            }
+        }
+
+        function toggleAiConciergeModal() {
+            const modal = document.getElementById('aiConciergeModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function sendQuickConcierge(text) {
+            document.getElementById('conciergeInput').value = text;
+            handleConciergeSubmit(new Event('submit'));
+        }
+
+        async function handleConciergeSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('conciergeInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatFeed = document.getElementById('conciergeChatFeed');
+            chatFeed.innerHTML += `
+                <div class="bg-cyan-500/10 text-cyan-200 p-3 rounded-2xl rounded-tr-none ml-auto max-w-[85%] border border-cyan-500/20">
+                    ${escapeHtml(message)}
+                </div>
+            `;
+            input.value = '';
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+
+            const loadingId = 'loading-' + Date.now();
+            chatFeed.innerHTML += `
+                <div id="${loadingId}" class="bg-slate-800 text-slate-400 p-3 rounded-2xl rounded-tl-none max-w-[85%] border border-slate-700 italic">
+                    Concierge is thinking...
+                </div>
+            `;
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+
+            try {
+                const gameListContext = gamesState.map(g => `${g.title} (${g.type})`).join(', ');
+                const prompt = `You are Tapcade Arcade Concierge. User asks: "${message}". Available games in arcade: [${gameListContext}]. Provide a friendly, brief 2-sentence recommendation.`;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                const data = await response.json();
+                const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "I recommend trying our featured TOP and HOT games!";
+                
+                document.getElementById(loadingId).outerHTML = `
+                    <div class="bg-slate-800 text-slate-200 p-3 rounded-2xl rounded-tl-none max-w-[85%] border border-slate-700">
+                        ${escapeHtml(reply)}
+                    </div>
+                `;
+            } catch (err) {
+                document.getElementById(loadingId).outerHTML = `
+                    <div class="bg-slate-800 text-red-400 p-3 rounded-2xl rounded-tl-none max-w-[85%] border border-slate-700">
+                        Sorry, I had trouble finding recommendations.
+                    </div>
+                `;
+            }
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+        }
+
+        async function generateAiThumbnail() {
+            const titleInput = document.getElementById('newGameTitle');
+            const imageInput = document.getElementById('newGameImage');
+            
+            if (!titleInput.value.trim()) {
+                showToast('Please enter a Game Title first!', 'warning');
+                return;
+            }
+
+            showToast('🎨 Generating retro cover art...', 'info');
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `Vibrant retro arcade style artwork for a video game titled ${titleInput.value.trim()}` }] }],
+                        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+                    })
+                });
+
+                const data = await response.json();
+                const base64Data = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (base64Data) {
+                    imageInput.value = `data:image/png;base64,${base64Data}`;
+                    showToast('AI Cover Art applied!', 'success');
+                } else {
+                    showToast('Could not generate art. Using fallback.', 'warning');
+                    imageInput.value = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80';
+                }
+            } catch (err) {
+                showToast('Image generation failed.', 'error');
+            }
+        }
+
+        function toggleAdminModal() {
+            document.getElementById('adminModal').classList.toggle('hidden');
+            renderAdminGamesList();
+        }
+
+        function handleAdminAuth(e) {
+            e.preventDefault();
+            const pwd = document.getElementById('adminPasswordInput').value;
+            
+            if (pwd === '12344321') {
+                isAdminLoggedIn = true;
+                document.getElementById('adminAuthSection').classList.add('hidden');
+                document.getElementById('adminContentSection').classList.remove('hidden');
+                document.getElementById('adminPasswordInput').value = '';
+                showToast('Admin access granted', 'success');
+                renderAdminGamesList();
+            } else {
+                showToast('Incorrect password', 'error');
+            }
+        }
+
+        function checkAdminSession() {
+            if (isAdminLoggedIn) {
+                document.getElementById('adminAuthSection').classList.add('hidden');
+                document.getElementById('adminContentSection').classList.remove('hidden');
+            }
+        }
+
+        function logoutAdmin() {
+            isAdminLoggedIn = false;
+            document.getElementById('adminAuthSection').classList.remove('hidden');
+            document.getElementById('adminContentSection').classList.add('hidden');
+            showToast('Logged out of Admin', 'info');
+        }
+
+        function handleAddGame(e) {
+            e.preventDefault();
+            const title = document.getElementById('newGameTitle').value.trim();
+            const url = document.getElementById('newGameUrl').value.trim();
+            const image = document.getElementById('newGameImage').value.trim();
+            const type = document.getElementById('newGameType').value;
+
+            const newGame = {
+                id: 'game-' + Date.now(),
+                title,
+                url,
+                image,
+                type,
+                createdAt: Date.now()
+            };
+
+            gamesState.unshift(newGame);
+            saveGamesToStorage();
+            renderGameGrid();
+            renderAdminGamesList();
+
+            document.getElementById('newGameTitle').value = '';
+            document.getElementById('newGameUrl').value = '';
+            document.getElementById('newGameImage').value = '';
+
+            showToast('Game added to arcade!', 'success');
+        }
+
+        function renderAdminGamesList() {
+            const list = document.getElementById('adminGamesList');
+            const count = document.getElementById('adminGameCount');
+            count.innerText = gamesState.length;
+
+            list.innerHTML = gamesState.map(g => `
+                <div class="flex items-center justify-between p-2 bg-slate-100 rounded-xl text-xs border border-slate-200">
+                    <div class="truncate max-w-[220px]">
+                        <span class="font-bold text-slate-800">${escapeHtml(g.title)}</span>
+                        <span class="text-[10px] text-slate-500 block">${g.type}</span>
+                    </div>
+                    <button onclick="confirmDeleteGame('${g.id}')" class="text-red-500 hover:text-red-700 font-bold px-2 py-1">
+                        Delete
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function confirmDeleteGame(id) {
+            const game = gamesState.find(g => g.id === id);
+            if (!game) return;
+
+            showConfirmModal(`Delete "${game.title}" from arcade library?`, () => {
+                gamesState = gamesState.filter(g => g.id !== id);
+                saveGamesToStorage();
+                renderGameGrid();
+                renderAdminGamesList();
+                showToast('Game removed', 'info');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-red-600 text-white',
+                warning: 'bg-amber-500 text-slate-900',
+                info: 'bg-[#1F2D36] text-[#00E5FF] border border-[#00E5FF]/30'
+            };
+
+            toast.className = `px-4 py-2.5 rounded-xl text-xs font-bold shadow-xl transition-all duration-300 transform translate-y-2 opacity-0 flex items-center gap-2 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showConfirmModal(message, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmMessage').innerText = message;
+            
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+
+            okBtn.onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+
+            cancelBtn.onclick = () => {
+                cleanup();
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
